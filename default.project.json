@@ -1,0 +1,11 @@
+{
+  "name": "ModelInspect",
+  "globIgnorePaths": [ "**/.package-lock.json" ],
+  "tree": {
+    "$path": "src",
+    "node_modules": {
+      "$className": "Folder",
+      "$path": "node_modules"
+    }
+  }
+}
