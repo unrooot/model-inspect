@@ -1,5 +1,9 @@
 ## ModelInspect
 
+this is still a super big WIP, I don't even think this will run properly
+
+---
+
 Source code for ModelInspect. This plugin was generated using Nevermore's CLI.
 
 # Tools
