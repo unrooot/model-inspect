@@ -145,15 +145,15 @@ function InstanceListEntry:Render(props)
 					SliceCenter = Rect.new(Vector2.new(0, 0), Vector2.new(16, 16));
 
 					Image = Blend.Computed(self._iconData, function(data)
-						return data.Image or ""
+						return data and data.Image or ""
 					end);
 
 					ImageRectOffset = Blend.Computed(self._iconData, function(data)
-						return data.ImageRectOffset or Vector2.new()
+						return data and data.ImageRectOffset or Vector2.new()
 					end);
 
 					ImageRectSize = Blend.Computed(self._iconData, function(data)
-						return data.ImageRectSize or Vector2.new()
+						return data and data.ImageRectSize or Vector2.new()
 					end);
 
 					Blend.New "UIAspectRatioConstraint" {

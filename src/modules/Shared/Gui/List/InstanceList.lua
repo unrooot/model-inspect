@@ -20,50 +20,59 @@ function InstanceList.new()
 	self._entries = self._maid:Add(ObservableSortedList.new())
 	self._percentVisibleTarget = self._maid:Add(ValueObject.new(0))
 
-	self._maid:GiveTask(self._currentInstances:Observe():Subscribe(function(currentInstances)
+	self._maid:GiveTask(self._currentInstances:ObserveBrio():Subscribe(function(currentInstancesBrio)
+		if currentInstancesBrio:IsDead() then
+			return
+		end
+
+		local currentInstances = currentInstancesBrio:GetValue()
 		local currentEntries = self._entries:GetList()
 
 		if not currentInstances or #currentInstances == 0 then
-			for index, entry in currentEntries do
-				entry:Destroy()
-				self._entries:RemoveByKey(index)
+			for i = 1, #currentEntries do
+				currentEntries[i]:Destroy()
+				self._entries:RemoveByKey(1)
 			end
 
 			return
 		end
 
-		for index, instance in currentInstances do
-			index -= 1
-
-			if index == 0 then
-				continue
-			end
-
-			local currentEntry = currentEntries[index]
+		for i = 2, math.max(#currentEntries, #currentInstances) do
+			local currentEntry = currentEntries[i - 1]
+			local currentInstance = currentInstances[i]
 
 			if currentEntry then
-				currentEntry:SetInstance(instance)
+				currentEntry:SetInstance(currentInstance)
 				continue
+			else
+				currentEntry = InstanceListEntry.new()
+				currentEntry:SetInstance(currentInstance)
+				currentEntry:SetLayoutOrder(i - 1)
+
+				currentEntry._maid:GiveTask(self._entries:Add(currentEntry, currentEntry.LayoutOrder:Observe()))
 			end
-
-			currentEntry = InstanceListEntry.new()
-			currentEntry:SetInstance(instance)
-			currentEntry:SetLayoutOrder(index)
-
-			currentEntry._maid:GiveTask(self._currentDepth:Observe():Subscribe(function(depth)
-				local modelDepth = currentEntry.LayoutOrder.Value
-
-				currentEntry:SetVisible(depth <= modelDepth)
-			end))
-
-			currentEntry._maid:GiveTask(self._entries:Add(currentEntry, currentEntry.LayoutOrder:Observe()))
 		end
 
-		if #currentInstances - 1 < #currentEntries then
-			for index, entry in self._entries:GetList() do
-				index -= 1
-				if index >= #currentInstances then
-					entry:Destroy()
+		currentInstancesBrio:ToMaid():GiveTask(self._currentDepth:Observe():Subscribe(function(depth)
+			for i = 1, #currentEntries do
+				local currentEntry = currentEntries[i]
+				if currentEntry then
+					local modelDepth = currentEntry.LayoutOrder.Value
+					currentEntry:SetVisible(depth < modelDepth)
+				end
+			end
+		end))
+
+		if #currentEntries > #currentInstances then
+			for i = #currentEntries + 1, #currentInstances, -1 do
+				local currentEntry = currentEntries[i]
+				if currentEntry then
+					currentEntry:Destroy()
+
+					local index = self._entries:GetIndexByKey(currentEntry)
+					if index then
+						self._entries:RemoveByKey(index)
+					end
 				end
 			end
 		end
@@ -82,9 +91,11 @@ end
 
 function InstanceList:SetInstances(instanceList: {}?)
 	if instanceList and self._currentInstances.Value then
-		if instanceList[1] ~= self._currentInstances.Value[1] then
+		if instanceList[1] ~= self._currentInstances.Value[1] or #instanceList == 0 then
 			self._currentDepth.Value = 0
 		end
+	elseif not instanceList then
+		self._currentDepth.Value = 0
 	end
 
 	self._currentInstances.Value = instanceList

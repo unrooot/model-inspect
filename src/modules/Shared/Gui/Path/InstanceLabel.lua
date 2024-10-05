@@ -143,7 +143,8 @@ function InstanceLabel:Render(props)
 								end);
 
 								Size = Blend.Computed(self._iconData, self._textWidth, function(iconData, textWidth)
-									local iconWidth = iconData and iconData.ImageRectSize.X or 0
+									local rectSize = iconData and iconData.ImageRectSize
+									local iconWidth = rectSize and rectSize.X or 0
 
 									return UDim2.fromScale((textWidth / iconWidth) * 1.7, 1.75);
 								end);

@@ -85,7 +85,7 @@ local function initialize(plugin)
 
 			local pluginMouse = plugin:GetMouse()
 
-			local instanceList = enabledMaid:Add(InstanceList.new())
+			local currentMode = enabledMaid:Add(ValueObject.new("model"))
 			local modelList = enabledMaid:Add(InstanceList.new())
 
 			enabledMaid:GiveTask(pluginMouse.Button1Down:Connect(function()
@@ -191,6 +191,29 @@ local function initialize(plugin)
 				};
 			}:Subscribe())
 
+			enabledMaid:GiveTask(currentMode:Observe():Subscribe(function(newMode)
+				if not currentSelectionSet then
+					modelList:SetInstances(nil)
+					return
+				end
+
+				if newMode == "model" then
+					if currentSelectionSet[1] == nil then
+						modelList:SetInstances(nil)
+						return
+					end
+
+					modelList:SetInstances(currentSelectionSet[1][2])
+				elseif newMode == "instance" then
+					local instances = {}
+					for index, instanceData in currentSelectionSet do
+						table.insert(instances, index, instanceData[1])
+					end
+
+					modelList:SetInstances(instances)
+				end
+			end))
+
 			enabledMaid:GiveTask(Blend.New "ScreenGui" {
 				Name = "ModelInspectGui";
 				Parent = CoreGui;
@@ -203,6 +226,8 @@ local function initialize(plugin)
 
 				enabledMaid:GiveTask(UserInputService.InputBegan:Connect(function(input)
 					if input.KeyCode == Enum.KeyCode.Tab then
+						currentMode.Value = "instance"
+
 						if not currentSelectionSet then
 							return
 						end
@@ -229,6 +254,8 @@ local function initialize(plugin)
 							table.insert(ignoredInstances, currentSelectionSet[#currentSelectionSet])
 						end
 
+						modelList:SetCurrentDepth(currentDepth)
+
 						local currentSelection = currentSelectionSet[#currentSelectionSet]
 						if currentDepth ~= 0 then
 							local instances = currentSelectionSet[currentDepth]
@@ -244,6 +271,8 @@ local function initialize(plugin)
 							currentRootInstance.Value = currentSelection
 						end
 					elseif input.KeyCode == Enum.KeyCode.Space then
+						currentMode.Value = "model"
+
 						if not currentSelectionSet then
 							return
 						end
@@ -303,7 +332,7 @@ local function initialize(plugin)
 							return UDim2.new()
 						end
 
-						local parts = {}
+						local selectedInstances = {}
 
 						local params = RaycastParams.new()
 						params.FilterType = Enum.RaycastFilterType.Exclude
@@ -325,14 +354,14 @@ local function initialize(plugin)
 							until
 								not parent or parent == Workspace
 
-							parts[1] = { instance, parents }
+							selectedInstances[1] = { instance, parents }
 
 							params:AddToFilter(instance)
 						end
 
 						local depth = 1
 
-						local function getInstances()
+						local function getSelectedInstances()
 							raycastResult = workspace:Raycast(ray.Origin, ray.Direction, params)
 
 							if raycastResult then
@@ -349,46 +378,50 @@ local function initialize(plugin)
 									not parent or parent == Workspace
 
 								depth += 1
-								parts[depth] = { instance, parents }
+								selectedInstances[depth] = { instance, parents }
 								params:AddToFilter(instance)
-
-								getInstances()
+								getSelectedInstances()
 							end
 						end
 
-						getInstances()
-						currentSelectionSet = parts
+						getSelectedInstances()
+						currentSelectionSet = selectedInstances
 
 						local firstInstance
-						if parts and #parts > 0 then
-							modelList:SetInstances(parts[1][2])
 
-							if currentDepth == 0 then
-								local models = parts[1][2]
-								if #models > 0 then
-									firstInstance = models[1]
-								else
-									modelList:SetInstances(nil)
+						if selectedInstances and #selectedInstances > 0 then
+							if currentMode.Value == "model" then
+								modelList:SetInstances(selectedInstances[1][2])
+
+								local instanceInfo = selectedInstances[currentDepth == 0 and 1 or currentDepth]
+								if instanceInfo then
+									local current = instanceInfo[2]
+									if current then
+										firstInstance = current[1]
+									end
 								end
-							else
-								local current = parts[currentDepth]
-								if current then
-									firstInstance = current[1]
+							elseif currentMode.Value == "instance" then
+								local instances = {}
+								for index, instanceData in selectedInstances do
+									table.insert(instances, index, instanceData[1])
+								end
+
+								modelList:SetInstances(instances)
+
+								if (selectedInstances and #selectedInstances > 0) and not firstInstance then
+									local current = instances[currentDepth == 0 and 1 or currentDepth]
+									if current then
+										firstInstance = current
+									end
 								end
 							end
 						else
-							instanceList:SetInstances(nil)
 							modelList:SetInstances(nil)
 						end
 
-						if (parts and #parts > 0) and not firstInstance then
-							firstInstance = parts[1][1]
-						end
-
-						if #parts == 0 then
+						if #selectedInstances == 0 then
 							currentRootInstance.Value = nil
 						else
-							print(firstInstance)
 							currentRootInstance.Value = firstInstance
 						end
 
@@ -413,24 +446,38 @@ local function initialize(plugin)
 					return UDim2.fromOffset(posX, posY)
 				end);
 
+				enabledMaid:GiveTask(modelList:Render({
+					Position = mousePosition;
+					Parent = screenGui;
+
+					HeaderText = currentMode:Observe():Pipe({
+						Rx.map(function(mode)
+							if mode == "model" then
+								return "next models under cursor"
+							else
+								return "next instances under cursor"
+							end
+						end);
+					});
+
+					Hotkey = currentMode:Observe():Pipe({
+						Rx.map(function(mode)
+							if mode == "model" then
+								return Enum.KeyCode.Space
+							else
+								return Enum.KeyCode.Tab
+							end
+						end);
+					});
+				}):Subscribe(function()
+					modelList:Show()
+				end))
+
 				enabledMaid:GiveTask(path:Render({
 					Position = mousePosition;
 					Parent = screenGui;
 				}):Subscribe(function()
 					path:Show()
-				end))
-
-				enabledMaid:GiveTask(instanceList:Render({
-					--
-				}))
-
-				enabledMaid:GiveTask(modelList:Render({
-					Hotkey = Enum.KeyCode.Space;
-					Position = mousePosition;
-					HeaderText = "next models under cursor";
-					Parent = screenGui;
-				}):Subscribe(function()
-					modelList:Show()
 				end))
 			end))
 
