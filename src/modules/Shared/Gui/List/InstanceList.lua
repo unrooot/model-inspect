@@ -37,8 +37,8 @@ function InstanceList.new()
 			return
 		end
 
-		for i = 2, math.max(#currentEntries, #currentInstances) do
-			local currentEntry = currentEntries[i - 1]
+		for i = 1, math.max(#currentEntries, #currentInstances) do
+			local currentEntry = currentEntries[i]
 			local currentInstance = currentInstances[i]
 
 			if currentEntry then
@@ -47,24 +47,37 @@ function InstanceList.new()
 			else
 				currentEntry = InstanceListEntry.new()
 				currentEntry:SetInstance(currentInstance)
-				currentEntry:SetLayoutOrder(i - 1)
+				currentEntry:SetLayoutOrder(i)
 
 				currentEntry._maid:GiveTask(self._entries:Add(currentEntry, currentEntry.LayoutOrder:Observe()))
 			end
 		end
 
-		currentInstancesBrio:ToMaid():GiveTask(self._currentDepth:Observe():Subscribe(function(depth)
-			for i = 1, #currentEntries do
-				local currentEntry = currentEntries[i]
-				if currentEntry then
-					local modelDepth = currentEntry.LayoutOrder.Value
-					currentEntry:SetVisible(depth < modelDepth)
-				end
+		-- Compute indent levels based on hierarchy
+		local instanceSet = {}
+		for _, inst in currentInstances do
+			if inst then
+				instanceSet[inst] = true
 			end
-		end))
+		end
+
+		for i, inst in currentInstances do
+			local entry = self._entries:GetList()[i]
+			if entry and inst then
+				local level = 0
+				local ancestor = inst.Parent
+				while ancestor do
+					if instanceSet[ancestor] then
+						level = level + 1
+					end
+					ancestor = ancestor.Parent
+				end
+				entry:SetIndentLevel(level)
+			end
+		end
 
 		if #currentEntries > #currentInstances then
-			for i = #currentEntries + 1, #currentInstances, -1 do
+			for i = #currentEntries, #currentInstances + 1, -1 do
 				local currentEntry = currentEntries[i]
 				if currentEntry then
 					currentEntry:Destroy()
@@ -76,6 +89,12 @@ function InstanceList.new()
 				end
 			end
 		end
+
+		self:_updateEntryStates()
+	end))
+
+	self._maid:GiveTask(self._currentDepth:Observe():Subscribe(function()
+		self:_updateEntryStates()
 	end))
 
 	self._maid:GiveTask(self.VisibleChanged:Connect(function(isVisible)
@@ -83,6 +102,25 @@ function InstanceList.new()
 	end))
 
 	return self
+end
+
+function InstanceList:_updateEntryStates()
+	local depth = self._currentDepth.Value
+	local entries = self._entries:GetList()
+
+	for _, entry in entries do
+		local entryDepth = entry.LayoutOrder.Value
+		entry:SetVisible(true)
+
+		local displayDepth = math.max(depth, 1)
+		if entryDepth == displayDepth then
+			entry:SetHighlightState("selected")
+		elseif entryDepth == displayDepth + 1 then
+			entry:SetHighlightState("next")
+		else
+			entry:SetHighlightState("none")
+		end
+	end
 end
 
 function InstanceList:SetCurrentDepth(depth: number)
@@ -116,7 +154,9 @@ function InstanceList:Render(props)
 
 		for index, button in list do
 			local progress = (index - 1) / entryCount + 1e-1
-			button:SetVisible(progress <= percent)
+			if percent < 0.99 then
+				button:SetVisible(progress <= percent)
+			end
 		end
 	end):Subscribe())
 

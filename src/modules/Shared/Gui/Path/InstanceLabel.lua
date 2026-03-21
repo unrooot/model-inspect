@@ -107,9 +107,7 @@ function InstanceLabel:Render(props)
 						ImageTransparency = transparency;
 						LayoutOrder = 1;
 						Position = UDim2.fromScale(0.5, 0.5);
-						ScaleType = Enum.ScaleType.Slice;
 						Size = UDim2.fromScale(1, 1);
-						SliceCenter = Rect.new(Vector2.new(0, 0), Vector2.new(16, 16));
 
 						Image = Blend.Computed(self._iconData, function(data)
 							return data.Image or ""
@@ -142,11 +140,10 @@ function InstanceLabel:Render(props)
 									return 0.9 + percent
 								end);
 
-								Size = Blend.Computed(self._iconData, self._textWidth, function(iconData, textWidth)
-									local rectSize = iconData and iconData.ImageRectSize
-									local iconWidth = rectSize and rectSize.X or 0
-
-									return UDim2.fromScale((textWidth / iconWidth) * 1.7, 1.75);
+								Size = Blend.Computed(self._textWidth, function(textWidth)
+									local iconSize = 15
+									local totalWidth = iconSize + textWidth
+									return UDim2.fromScale(totalWidth / iconSize, 1);
 								end);
 							};
 						};

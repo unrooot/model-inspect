@@ -16,7 +16,9 @@ function InstanceListEntry.new()
 	self._iconData = self._maid:Add(ValueObject.new({}))
 	self._instance = self._maid:Add(ValueObject.new(nil))
 	self._instanceName = self._maid:Add(ValueObject.new(""))
+	self._highlightState = self._maid:Add(ValueObject.new("none"))
 	self._percentVisibleTarget = self._maid:Add(ValueObject.new(0))
+	self._indentLevel = self._maid:Add(ValueObject.new(0))
 
 	self.LayoutOrder = self._maid:Add(ValueObject.new(0))
 
@@ -46,6 +48,14 @@ function InstanceListEntry:SetLayoutOrder(order: number)
 	self.LayoutOrder.Value = order
 end
 
+function InstanceListEntry:SetHighlightState(state: string)
+	self._highlightState.Value = state
+end
+
+function InstanceListEntry:SetIndentLevel(level: number)
+	self._indentLevel.Value = level
+end
+
 function InstanceListEntry:Render(props)
 	local target = self._percentVisibleTarget:Observe()
 
@@ -72,10 +82,51 @@ function InstanceListEntry:Render(props)
 
 		[Blend.Children] = {
 			Blend.New "Frame" {
+				Name = "indentGuides";
+				BackgroundTransparency = 1;
+				Size = UDim2.fromScale(1, 1);
+				ZIndex = 2;
+
+				[Blend.Children] = (function()
+					local guides = {}
+					for i = 1, 8 do
+						table.insert(guides, Blend.New "Frame" {
+							Name = "guide" .. i;
+							BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+							Position = UDim2.fromOffset(7 + (i - 1) * 12, 2);
+							Size = UDim2.new(0, 1, 1, -4);
+
+							BackgroundTransparency = Blend.Computed(self._indentLevel, transparency, function(indentLevel, trans)
+								if i <= indentLevel then
+									return 0.8 + (trans * 0.2)
+								end
+								return 1
+							end);
+						})
+					end
+					return guides
+				end)();
+			};
+
+			Blend.New "Frame" {
 				Name = "wrapper";
 				Size = UDim2.fromScale(1, 1);
 
-				BackgroundTransparency = Blend.Computed(transparency, function(percent)
+				BackgroundColor3 = Blend.Computed(self._highlightState, function(state)
+					if state == "selected" then
+						return Color3.fromRGB(5, 188, 255)
+					elseif state == "next" then
+						return Color3.fromRGB(150, 150, 150)
+					end
+					return Color3.fromRGB(255, 255, 255)
+				end);
+
+				BackgroundTransparency = Blend.Computed(transparency, self._highlightState, function(percent, state)
+					if state == "selected" then
+						return 0.7 + (percent * 0.3)
+					elseif state == "next" then
+						return 0.75 + (percent * 0.25)
+					end
 					return 0.9 + percent
 				end);
 
@@ -96,7 +147,12 @@ function InstanceListEntry:Render(props)
 
 				Blend.New "UIPadding" {
 					PaddingBottom = UDim.new(0, 3);
-					PaddingLeft = UDim.new(0, 3);
+					PaddingLeft = Blend.Computed(self._indentLevel, function(indentLevel)
+						if indentLevel == 0 then
+							return UDim.new(0, 7)
+						end
+						return UDim.new(0, 6 + indentLevel * 12)
+					end);
 					PaddingRight = UDim.new(0, 3);
 					PaddingTop = UDim.new(0, 3);
 				};
@@ -140,9 +196,7 @@ function InstanceListEntry:Render(props)
 					ImageTransparency = transparency;
 					LayoutOrder = 1;
 					Position = UDim2.fromScale(0.5, 0.5);
-					ScaleType = Enum.ScaleType.Slice;
 					Size = UDim2.fromScale(1, 1);
-					SliceCenter = Rect.new(Vector2.new(0, 0), Vector2.new(16, 16));
 
 					Image = Blend.Computed(self._iconData, function(data)
 						return data and data.Image or ""

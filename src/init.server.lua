@@ -36,16 +36,14 @@ end
 
 local function getCtrlPressed()
 	local pressedKeys = UserInputService:GetKeysPressed()
-	local ctrlPressed = false
 
 	for _, inputObject in pressedKeys do
-		if inputObject.KeyCode == Enum.KeyCode.LeftControl then
-			ctrlPressed = true
-			break
+		if inputObject.KeyCode == Enum.KeyCode.LeftControl or inputObject.KeyCode == Enum.KeyCode.LeftMeta then
+			return true
 		end
 	end
 
-	return ctrlPressed
+	return false
 end
 
 local function initialize(plugin)
@@ -59,9 +57,7 @@ local function initialize(plugin)
 		true
 	)
 
-	local camera = workspace.CurrentCamera
 	local currentRootInstance = maid:Add(ValueObject.new(nil))
-	local holdingSelection = maid:Add(ValueObject.new(false))
 	local selectionEnabled = maid:Add(ValueObject.new(false))
 
 	local percentAlpha = AccelTween.new(300)
@@ -86,11 +82,10 @@ local function initialize(plugin)
 			local pluginMouse = plugin:GetMouse()
 
 			local currentMode = enabledMaid:Add(ValueObject.new("model"))
+			local currentModelList = {}
 			local modelList = enabledMaid:Add(InstanceList.new())
 
 			enabledMaid:GiveTask(pluginMouse.Button1Down:Connect(function()
-				holdingSelection.Value = true
-
 				if getCtrlPressed() then
 					local rootInstance = currentRootInstance.Value
 					local selectedInstances = Selection:Get()
@@ -104,12 +99,12 @@ local function initialize(plugin)
 
 					Selection:Set(selectedInstances)
 				else
+					currentDepth = 0
+					modelDepth = 1
+					modelList:SetCurrentDepth(0)
 					Selection:Set({ currentRootInstance.Value })
+					selectionEnabled.Value = false
 				end
-			end))
-
-			enabledMaid:GiveTask(pluginMouse.Button1Up:Connect(function()
-				holdingSelection.Value = false
 			end))
 
 			local mousePosition = enabledMaid:Add(ValueObject.new(Vector2.zero))
@@ -157,9 +152,9 @@ local function initialize(plugin)
 				};
 
 				Blend.New "SelectionBox" {
-					Color3 = Color3.fromRGB(5, 188, 255);
+					Color3 = Color3.fromRGB(0, 0, 0);
 					LineThickness = 0.03;
-					SurfaceColor3 = Color3.fromRGB(5, 188, 255);
+					SurfaceColor3 = Color3.fromRGB(0, 0, 0);
 
 					Adornee = Blend.Computed(currentRootInstance, function(rootInstance)
 						if not rootInstance then
@@ -203,7 +198,17 @@ local function initialize(plugin)
 						return
 					end
 
-					modelList:SetInstances(currentSelectionSet[1][2])
+					local allModels = {}
+					for _, instanceData in currentSelectionSet do
+						for _, model in instanceData[2] do
+							if not table.find(allModels, model) then
+								table.insert(allModels, model)
+							end
+						end
+					end
+
+					currentModelList = allModels
+					modelList:SetInstances(allModels)
 				elseif newMode == "instance" then
 					local instances = {}
 					for index, instanceData in currentSelectionSet do
@@ -270,54 +275,36 @@ local function initialize(plugin)
 						if currentSelection then
 							currentRootInstance.Value = currentSelection
 						end
+
 					elseif input.KeyCode == Enum.KeyCode.Space then
 						currentMode.Value = "model"
 
-						if not currentSelectionSet then
+						if #currentModelList == 0 then
 							return
 						end
 
-						local currentInstances = {}
 						local shiftPressed = getShiftPressed()
 
-						if currentDepth ~= 0 then
-							currentInstances = currentSelectionSet[currentDepth]
-						else
-							currentInstances = currentSelectionSet[1]
-						end
-
-						if not currentInstances then
-							return
-						end
-
-						local models = currentInstances[2]
-						if #models == 0 then
-							return
-						end
-
 						if shiftPressed then
-							if modelDepth ~= 1 and modelDepth - 1 >= 1 then
+							if modelDepth - 1 >= 1 then
 								modelDepth -= 1
 							end
 						else
-							if modelDepth + 1 <= #models then
+							if modelDepth + 1 <= #currentModelList then
 								modelDepth += 1
 							end
 						end
 
 						modelList:SetCurrentDepth(modelDepth)
 
-						local targetModel
-						if modelDepth <= 1 then
-							targetModel = models[1]
-						else
-							targetModel = models[modelDepth]
-						end
-
+						local targetModel = currentModelList[modelDepth]
 						if targetModel then
 							currentRootInstance.Value = targetModel
 						end
+
 					elseif input.KeyCode == Enum.KeyCode.Escape then
+						currentDepth = 0
+						modelDepth = 1
 						selectionEnabled.Value = false
 					end
 				end))
@@ -336,6 +323,11 @@ local function initialize(plugin)
 
 						local params = RaycastParams.new()
 						params.FilterType = Enum.RaycastFilterType.Exclude
+
+						local camera = workspace.CurrentCamera
+						if not camera then
+							return UDim2.new()
+						end
 
 						local unitRay = camera:ScreenPointToRay(mousePosition.X, mousePosition.Y)
 						local ray = Ray.new(unitRay.Origin, unitRay.Direction * SELECTION_MAX_DISTANCE)
@@ -385,20 +377,37 @@ local function initialize(plugin)
 						end
 
 						getSelectedInstances()
+
+						local previousFirst = currentSelectionSet and currentSelectionSet[1] and currentSelectionSet[1][1]
+						local newFirst = selectedInstances and selectedInstances[1] and selectedInstances[1][1]
+						if previousFirst ~= newFirst then
+							currentDepth = 0
+						end
+
 						currentSelectionSet = selectedInstances
 
 						local firstInstance
 
 						if selectedInstances and #selectedInstances > 0 then
 							if currentMode.Value == "model" then
-								modelList:SetInstances(selectedInstances[1][2])
-
-								local instanceInfo = selectedInstances[currentDepth == 0 and 1 or currentDepth]
-								if instanceInfo then
-									local current = instanceInfo[2]
-									if current then
-										firstInstance = current[1]
+								local allModels = {}
+								for _, instanceData in selectedInstances do
+									for _, model in instanceData[2] do
+										if not table.find(allModels, model) then
+											table.insert(allModels, model)
+										end
 									end
+								end
+
+								if modelDepth > #allModels then
+									modelDepth = math.max(1, #allModels)
+								end
+
+								currentModelList = allModels
+								modelList:SetInstances(allModels)
+
+								if #allModels > 0 then
+									firstInstance = allModels[math.min(modelDepth, #allModels)]
 								end
 							elseif currentMode.Value == "instance" then
 								local instances = {}
@@ -425,9 +434,6 @@ local function initialize(plugin)
 							currentRootInstance.Value = firstInstance
 						end
 
-						if holdingSelection.Value then
-							Selection:Set({ currentRootInstance.Value })
-						end
 
 						positionX.Value = mousePosition.X + 20
 						positionY.Value = mousePosition.Y
