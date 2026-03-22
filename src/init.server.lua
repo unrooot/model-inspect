@@ -378,11 +378,6 @@ local function initialize(plugin)
 
 						getSelectedInstances()
 
-						local previousFirst = currentSelectionSet and currentSelectionSet[1] and currentSelectionSet[1][1]
-						local newFirst = selectedInstances and selectedInstances[1] and selectedInstances[1][1]
-						if previousFirst ~= newFirst then
-							currentDepth = 0
-						end
 
 						currentSelectionSet = selectedInstances
 
@@ -399,15 +394,14 @@ local function initialize(plugin)
 									end
 								end
 
-								if modelDepth > #allModels then
-									modelDepth = math.max(1, #allModels)
-								end
+								local effectiveDepth = math.min(modelDepth, #allModels)
 
 								currentModelList = allModels
 								modelList:SetInstances(allModels)
+								modelList:SetCurrentDepth(effectiveDepth)
 
 								if #allModels > 0 then
-									firstInstance = allModels[math.min(modelDepth, #allModels)]
+									firstInstance = allModels[effectiveDepth]
 								end
 							elseif currentMode.Value == "instance" then
 								local instances = {}
@@ -415,13 +409,13 @@ local function initialize(plugin)
 									table.insert(instances, index, instanceData[1])
 								end
 
-								modelList:SetInstances(instances)
+								local effectiveDepth = math.min(currentDepth, #instances)
 
-								if (selectedInstances and #selectedInstances > 0) and not firstInstance then
-									local current = instances[currentDepth == 0 and 1 or currentDepth]
-									if current then
-										firstInstance = current
-									end
+								modelList:SetInstances(instances)
+								modelList:SetCurrentDepth(effectiveDepth)
+
+								if #instances > 0 then
+									firstInstance = instances[math.max(1, effectiveDepth)]
 								end
 							end
 						else
