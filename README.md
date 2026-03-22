@@ -4,7 +4,7 @@ Model Inspect is a Roblox Studio plugin to make it easier to select models and i
 
 ### How to use
 1. Install the plugin by building it or downloading the latest release.
-2. Bind a shortcut: File → Customize Shortcuts → search "[Model Inspect] Enable Selection".
+2. Bind a shortcut: File → Customize Shortcuts → search "[Model Inspect] Enable Selection". (e.g. `Ctrl + Space`)
 3. Hover over instances to see models under your cursor. Use `Space` / `Shift + Space` to cycle through models, and click to select. `Cmd/Ctrl + Click` adds to your selection without dismissing.
 4. Press `Tab` / `Shift + Tab` to switch to cycling through individual instances.
 
